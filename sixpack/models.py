@@ -67,6 +67,7 @@ class Experiment(object):
             'has_winner': self.winner is not None,
             'winner': self.winner.name if self.winner is not None else '',
             'is_archived': self.is_archived(),
+            'is_paused': self.is_paused(),
             'kpis': list(self.kpis),
             'kpi': self.kpi
         }
@@ -255,14 +256,27 @@ class Experiment(object):
 
     def archive(self):
         self.redis.hset(self.key(), 'archived', 1)
-
-    def unarchive(self):
-        self.redis.hdel(self.key(), 'archived')
+        self.redis.delete(_key('e:{0}:users'.format(self.name)))
 
     def is_archived(self):
         return self.redis.hexists(self.key(), 'archived')
 
+    def pause(self):
+        self.redis.hset(self.key(), 'paused', 1)
+
+    def resume(self):
+        self.redis.hdel(self.key(), 'paused')
+
+    def is_paused(self):
+        return self.redis.hexists(self.key(), 'paused')
+
     def convert(self, client, reward, dt=None, kpi=None):
+        if self.is_archived():
+            raise ValueError('this experiment is archived and can no longer be updated')
+
+        if self.is_paused():
+            raise ValueError('this experiment is paused and can not receive updates.')
+
         if self.is_client_excluded(client):
             raise ValueError('this client was not participating')
 
@@ -381,7 +395,10 @@ class Experiment(object):
           1. An existing alternative
           2. A server-chosen alternative
         """
-        if self.is_archived():
+        if self.is_archived() or self.is_paused():
+            return self.control, 'exclude'
+
+        if self.is_client_excluded(client):
             return self.control, 'exclude'
 
         chosen_alternative = self.existing_alternative(client)
@@ -432,7 +449,7 @@ class Experiment(object):
 
     def existing_alternative(self, client):
         if self.is_client_excluded(client):
-            return self.control
+            return None
 
         alts = self.get_alternative_names()
         keys = [_key("p:{0}:{1}:all".format(self.name, alt)) for alt in alts]
@@ -492,29 +509,30 @@ class Experiment(object):
         if len(alternatives) < 2:
             raise ValueError('experiments require at least two alternatives')
 
-        if traffic_fraction is None:
-            traffic_fraction = 1
-
-        if explore_fraction is None:
-            explore_fraction = 0.1
-
-        update = False
+        is_update = False
         try:
             experiment = Experiment.find(experiment_name, redis=redis)
-            update = True
+            is_update = True
         except ValueError:
             algorithm = ALGORITHMS[experiment_type]
             experiment = algorithm(experiment_name, alternatives, redis=redis)
-            # TODO: I want to revisit this later
+
+            if traffic_fraction is None:
+                traffic_fraction = 1
+
+            if explore_fraction is None:
+                explore_fraction = 0.1
+
+            # TODO: I want to revist this later
             experiment.set_traffic_fraction(traffic_fraction)
             experiment.set_explore_fraction(explore_fraction)
             experiment.save()
 
-        if update and experiment.traffic_fraction != traffic_fraction:
-            experiment.set_traffic_fraction(traffic_fraction)
-            experiment.store_traffic_fraction()
+        # only check traffic fraction if the experiment is being updated and the traffic fraction actually changes
+        if is_update and traffic_fraction is not None and experiment.traffic_fraction != traffic_fraction:
+            raise ValueError('do not change traffic fraction once a test has started. please delete in admin!')
 
-        if update and experiment.explore_fraction != explore_fraction:
+        if is_update and explore_fraction is not None and experiment.explore_fraction != explore_fraction:
             experiment.set_explore_fraction(explore_fraction)
             experiment.store_explore_fraction()
 
@@ -531,7 +549,7 @@ class Experiment(object):
         return redis.smembers(_key('e'))
 
     @staticmethod
-    def all(exclude_archived=True, redis=None):
+    def all(exclude_archived=True, exclude_paused=True, redis=None):
         experiments = []
         keys = redis.smembers(_key('e'))
 
@@ -539,13 +557,20 @@ class Experiment(object):
             experiment = Experiment.find(key, redis=redis)
             if experiment.is_archived() and exclude_archived:
                 continue
+            if experiment.is_paused() and exclude_paused:
+                continue
             experiments.append(experiment)
         return experiments
 
     @staticmethod
     def archived(redis=None):
-        experiments = Experiment.all(exclude_archived=False, redis=redis)
+        experiments = Experiment.all(exclude_archived=False, exclude_paused=True, redis=redis)
         return [exp for exp in experiments if exp.is_archived()]
+
+    @staticmethod
+    def paused(redis=None):
+        experiments = Experiment.all(exclude_archived=True, exclude_paused=False, redis=redis)
+        return [exp for exp in experiments if exp.is_paused()]
 
     @staticmethod
     def load_alternatives(experiment_name, redis=None):
@@ -577,7 +602,7 @@ class ABExperiment(Experiment):
         super(ABExperiment, self).__init__(name, alternatives, winner, traffic_fraction, explore_fraction, "ab", redis)
 
     def choose_alternative(self, client):
-        rnd = round(random.uniform(1, 0.01), 2)
+        rnd = random.uniform(1, 0.01)
         if rnd >= self.traffic_fraction:
             self.exclude_client(client)
             return self.control, False, False
@@ -1008,7 +1033,7 @@ class Alternative(object):
                         +   control_conversions * log(control_conversions / expected_control_conversions) \
                         +   control_failures * log(control_failures / expected_control_failures))
 
-        except ZeroDivisionError:
+        except (ValueError, ZeroDivisionError):
             return 0
 
         return round(g_stat, 2)

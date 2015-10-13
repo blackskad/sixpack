@@ -140,7 +140,9 @@ class Sixpack(object):
         experiment_type = request.args.get('type')
         force = request.args.get('force')
         client_id = request.args.get('client_id')
-        traffic_fraction = float(request.args.get('traffic_fraction', 1))
+        traffic_fraction = request.args.get('traffic_fraction')
+        if traffic_fraction is not None:
+            traffic_fraction = float(traffic_fraction)
         explore_fraction = float(request.args.get('explore_fraction', 0.1))
         prefetch = to_bool(request.args.get('prefetch', 'false'))
 
