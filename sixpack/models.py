@@ -111,16 +111,16 @@ class Experiment(object):
         pipe = self.redis.pipeline()
         if self.is_new_record():
             pipe.sadd(_key('e'), self.name)
+            pipe.hset(self.key(), 'algorithm', self._algorithm)
+            pipe.hset(self.key(), 'created_at', datetime.now().strftime("%Y-%m-%d %H:%M"))
+            # reverse here and use lpush to keep consistent with using lrange
+            for alternative in reversed(self.alternatives):
+                pipe.lpush("{0}:alternatives".format(self.key()), alternative.name)
 
-        pipe.hset(self.key(), 'algorithm', self._algorithm)
-        pipe.hset(self.key(), 'created_at', datetime.now().strftime("%Y-%m-%d %H:%M"))
+        # allow traffic fraction to change in mid-flight of an experiment.
         pipe.hset(self.key(), 'traffic_fraction', self._traffic_fraction)
         pipe.hset(self.key(), 'explore_fraction', self._explore_fraction)
-
-        # reverse here and use lpush to keep consistent with using lrange
-        for alternative in reversed(self.alternatives):
-            pipe.lpush("{0}:alternatives".format(self.key()), alternative.name)
-
+    
         pipe.execute()
 
     @property
@@ -509,6 +509,14 @@ class Experiment(object):
         if len(alternatives) < 2:
             raise ValueError('experiments require at least two alternatives')
 
+        # Traffic fraction can change at any time, so it needs to be
+        # checked.
+        if traffic_fraction is None:
+            traffic_fraction = 1
+
+        if explore_fraction is None:
+            explore_fraction = 0.1
+
         is_update = False
         try:
             experiment = Experiment.find(experiment_name, redis=redis)
@@ -517,22 +525,18 @@ class Experiment(object):
             algorithm = ALGORITHMS[experiment_type]
             experiment = algorithm(experiment_name, alternatives, redis=redis)
 
-            if traffic_fraction is None:
-                traffic_fraction = 1
-
-            if explore_fraction is None:
-                explore_fraction = 0.1
-
             # TODO: I want to revist this later
             experiment.set_traffic_fraction(traffic_fraction)
             experiment.set_explore_fraction(explore_fraction)
             experiment.save()
 
-        # only check traffic fraction if the experiment is being updated and the traffic fraction actually changes
-        if is_update and traffic_fraction is not None and experiment.traffic_fraction != traffic_fraction:
-            raise ValueError('do not change traffic fraction once a test has started. please delete in admin!')
+        # Only check traffic fraction if the experiment is being updated 
+        # and the traffic fraction actually changes.
+        if is_update and experiment.traffic_fraction != traffic_fraction:
+            experiment.set_traffic_fraction(traffic_fraction)
+            experiment.save()
 
-        if is_update and explore_fraction is not None and experiment.explore_fraction != explore_fraction:
+        if is_update and experiment.explore_fraction != explore_fraction:
             experiment.set_explore_fraction(explore_fraction)
             experiment.store_explore_fraction()
 
