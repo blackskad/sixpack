@@ -2,11 +2,12 @@
 Sixpack
 =======
 
+
 .. image:: https://travis-ci.org/seatgeek/sixpack.png?branch=master
-        :target: https://travis-ci.org/seatgeek/sixpack
+    :target: https://travis-ci.org/seatgeek/sixpack
 
 .. image:: https://coveralls.io/repos/seatgeek/sixpack/badge.png?branch=master
-  :target: https://coveralls.io/r/seatgeek/sixpack?branch=master
+    :target: https://coveralls.io/r/seatgeek/sixpack?branch=master
 
 Sixpack is a framework to enable A/B testing across multiple programming languages. It does this by exposing a simple API for client libraries.  Client libraries can be written in virtually any language.
 
@@ -21,14 +22,14 @@ Requirements
 Getting Started
 ===============
 
-To get going, create (or don't, but you really should) a new virtualenv for your sixpack installation. Follow that up with ``pip install``::
+To get going, create (or don't, but you really should) a new virtualenv for your Sixpack installation. Follow that up with ``pip install``::
 
     $ pip install sixpack
 
 
 **Note:** If you get an error like ``src/hiredis.h:4:20: fatal error: Python.h: No such file or directory`` you need to install the python development tools. ``apt-get install python-dev`` on Ubuntu.
 
-Next, create a Sixpack configuration. A configuration must be created for sixpack to run. Here's the default::
+Next, create a Sixpack configuration. A configuration must be created for Sixpack to run. Here's the default::
 
     redis_port: 6379                        # Redis port
     redis_host: localhost                   # Redis host
@@ -42,7 +43,7 @@ Next, create a Sixpack configuration. A configuration must be created for sixpac
     asset_path: gen                         # Path for compressed assets to live. This path is RELATIVE to sixpack/static
     secret_key: '<your secret key here>'    # Random key (any string is valid, required for sixpack-web to run)
 
-You can store this file anywhere (we recommend ``/etc/sixpack/config.yml``). As long as Redis is running, you can now start the sixpack server like this::
+You can store this file anywhere (we recommend ``/etc/sixpack/config.yml``). As long as Redis is running, you can now start the Sixpack server like this::
 
     $ SIXPACK_CONFIG=<path to config.yml> sixpack
 
@@ -86,7 +87,7 @@ Arguments
 
 ``user_agent`` (optional) user agent of the user making a request. Used for bot detection.
 
-``ip_address`` (optional) ip address of user making a request. Used for bot detection.
+``ip_address`` (optional) IP address of user making a request. Used for bot detection.
 
 ``force`` (optional) force a specific alternative to be returned, example::
 
@@ -94,7 +95,7 @@ Arguments
 
 In this example, red will always be returned. This is used for testing only, and no participation will be recorded.
 
-``traffic_fraction`` (optional) sixpack allows for limiting experiments to a subset of traffic. You can pass the percentage of traffic you'd like to expose the test to as a decimal number here. (``?traffic_fraction=0.10`` for 10%)
+``traffic_fraction`` (optional) Sixpack allows for limiting experiments to a subset of traffic. You can pass the percentage of traffic you'd like to expose the test to as a decimal number here. (``?traffic_fraction=0.10`` for 10%)
 
 
 Response
@@ -122,19 +123,17 @@ You can convert a user with a ``GET`` request to the ``convert`` endpoint::
 
     $ curl http://localhost:5000/convert?experiment=button_color&client_id=12345678-1234-5678-1234-567812345678
 
-Arguments
----------
+Conversion Arguments
+--------------------
 
-``experiment`` (required) the name of the experiment you would like to convert on
-
-``client_id`` (required) the client you would like to convert.
-
-``kpi`` (optional) sixpack supports recording multiple KPIs. If you would like to track conversion against a specfic KPI, you can do that here. If the KPI does not exist, it will be created automatically.
+- ``experiment`` (required) the name of the experiment you would like to convert on.
+- ``client_id`` (required) the client you would like to convert.
+- ``kpi`` (optional) sixpack supports recording multiple KPIs. If you would like to track conversion against a specfic KPI, you can do that here. If the KPI does not exist, it will be created automatically.
 
 Notes
 -----
 
-You'll notice that the ``convert`` endpoint does not take a ``alternative`` query parameter. This is because Sixpack handles that internally with the ``client_id``.
+You'll notice that the ``convert`` endpoint does not take an ``alternative`` query parameter. This is because Sixpack handles that internally with the ``client_id``.
 
 We've included a 'health-check' endpoint, available at ``/_status``. This is helpful for monitoring and alerting if the Sixpack service becomes unavailable. The health check will respond with either 200 (success) or 500 (failure) headers.
 
@@ -178,7 +177,7 @@ Sixpack comes with a built in dashboard. You can start the dashboard with::
 
     $ SIXPACK_CONFIG=<path to config.yml> sixpack-web
 
-The sixpack dashboard allows you to visualize how each experiment's alternatives are doing compared to the rest, select alternatives as winners, and update experiment descriptions to something more human-readable
+The Sixpack dashboard allows you to visualize how each experiment's alternatives are doing compared to the rest, select alternatives as winners, and update experiment descriptions to something more human-readable.
 
 Sixpack-web defaults to run on port ``5001`` but can be changed with the ``SIXPACK_WEB_PORT`` environment variable.
 
@@ -212,27 +211,21 @@ Contributing
 ============
 
 1. Fork it
-2. Start Sixpack in development mode with
+2. Start Sixpack in development mode with::
 
-::
+      $ PYTHONPATH=. SIXPACK_CONFIG=<path to config.yml> bin/sixpack
 
-    $ PYTHONPATH=. SIXPACK_CONFIG=<path to config.yml> bin/sixpack
+   and::
 
-and
+      $ PYTHONPATH=. SIXPACK_CONFIG=<path to config.yml> bin/sixpack-web
 
-::
+   We've also included a small script that will seed Sixpack with lots of random data for testing and development on sixpack-web. You can seed Sixpack with the following command::
 
-    $ PYTHONPATH=. SIXPACK_CONFIG=<path to config.yml> bin/sixpack-web
+      $ PYTHONPATH=. SIXPACK_CONFIG=<path to config.yml> sixpack/test/seed
 
-We've also included a small script that will seed Sixpack with lots of random data for testing and development on sixpack-web. You can seed Sixpack with the following command
+   This command will make a few dozen requests to the ``participate`` and ``convert`` endpoints. Feel free to run it multiple times to get additional data.
 
-::
-
-    $ PYTHONPATH=. SIXPACK_CONFIG=<path to config.yml> sixpack/test/seed
-
-This command will make a few dozen requests to the ``participate`` and ``convert`` endpoints. Feel free to run it multiple times to get additional data.
-
-**Note:** By default the server runs in production mode. If you'd like to turn on Flask and Werkzeug debug modes set the ``SIXPACK_DEBUG`` environment variable to ``true``.
+   **Note:** By default the server runs in production mode. If you'd like to turn on Flask and Werkzeug debug modes set the ``SIXPACK_DEBUG`` environment variable to ``true``.
 
 3. Create your feature branch (``git checkout -b my-new-feature``)
 4. Write tests
@@ -241,14 +234,15 @@ This command will make a few dozen requests to the ``participate`` and ``convert
 7. Push to the branch (``git push origin my-new-feature``)
 8. Create new pull request
 
-Please avoid changing versions numbers; we'll take care of that for you
+Please avoid changing versions numbers; we'll take care of that for you.
 
 Using Sixpack in production?
-============
+============================
+
 If you're a company using Sixpack in production, kindly let us know! We're going to add a 'using Sixpack' section to the project landing page, and we'd like to include you. Drop Jack a line at jack [at] seatgeek dot.com with your company name.
 
 License
-============
+=======
 
 Sixpack is released under the `BSD 2-Clause License`_.
 

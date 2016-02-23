@@ -395,6 +395,7 @@ class Experiment(object):
           1. An existing alternative
           2. A server-chosen alternative
         """
+
         if self.is_archived() or self.is_paused():
             return self.control, 'exclude'
 
